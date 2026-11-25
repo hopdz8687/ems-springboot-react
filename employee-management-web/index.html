@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EMS – Quản lý nhân sự nội bộ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>Quản lý nhân sự</h1>
+      <p>Bản prototype chạy trên trình duyệt – dữ liệu lưu bằng Local Storage</p>
+    </div>
+    <dl class="summary" aria-label="Tổng quan">
+      <div><dt>Nhân viên</dt><dd id="sumEmployees">0</dd></div>
+      <div><dt>Phòng ban</dt><dd id="sumDepartments">0</dd></div>
+      <div><dt>Lương trung bình</dt><dd id="sumSalary">–</dd></div>
+    </dl>
+  </header>
+
+  <main class="layout">
+    <section class="panel" aria-labelledby="listTitle">
+      <div class="panel-head">
+        <h2 id="listTitle">Danh sách nhân viên</h2>
+        <button type="button" class="btn primary" id="btnAdd">Thêm nhân viên</button>
+      </div>
+
+      <div class="toolbar">
+        <label class="field grow">
+          <span>Tìm theo mã hoặc họ tên</span>
+          <input type="search" id="fKeyword" placeholder="Ví dụ: NV003 hoặc nguyen" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>Phòng ban</span>
+          <select id="fDept"><option value="">Tất cả</option></select>
+        </label>
+        <label class="field">
+          <span>Trạng thái</span>
+          <select id="fStatus">
+            <option value="">Tất cả</option>
+            <option>Đang làm</option>
+            <option>Đã nghỉ</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Sắp xếp</span>
+          <select id="fSort">
+            <option value="ma">Mã nhân viên</option>
+            <option value="tenAsc">Họ tên A → Z</option>
+            <option value="tenDesc">Họ tên Z → A</option>
+            <option value="luongAsc">Lương thấp → cao</option>
+            <option value="luongDesc">Lương cao → thấp</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Mã</th><th scope="col">Họ tên</th><th scope="col">Phòng ban</th>
+              <th scope="col">Chức vụ</th><th scope="col" class="num">Lương cơ bản</th>
+              <th scope="col">Trạng thái</th><th scope="col"><span class="sr-only">Thao tác</span></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="empty" hidden>Không có nhân viên nào khớp. Thử bỏ bớt bộ lọc hoặc thêm nhân viên mới.</p>
+      <p class="list-foot" id="listFoot"></p>
+    </section>
+
+    <aside class="side">
+      <section class="panel" aria-labelledby="statTitle">
+        <h2 id="statTitle">Nhân viên theo phòng ban</h2>
+        <ul class="bars" id="deptBars"></ul>
+        <h3>Theo trạng thái</h3>
+        <ul class="bars" id="statusBars"></ul>
+      </section>
+      <section class="panel" aria-labelledby="dataTitle">
+        <h2 id="dataTitle">Dữ liệu</h2>
+        <p class="hint">Dữ liệu chỉ nằm trong trình duyệt này. Xuất JSON để sao lưu hoặc chuyển sang máy khác.</p>
+        <div class="stack">
+          <button type="button" class="btn" id="btnExport">Xuất file JSON</button>
+          <button type="button" class="btn" id="btnImport">Nhập file JSON</button>
+          <button type="button" class="btn danger-ghost" id="btnReset">Khôi phục dữ liệu mẫu</button>
+          <input type="file" id="fileImport" accept="application/json,.json" hidden>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="formDialog" aria-labelledby="formTitle">
+    <form id="empForm" novalidate>
+      <h2 id="formTitle">Thêm nhân viên</h2>
+      <div class="errors" id="formErrors" role="alert" hidden></div>
+      <div class="grid">
+        <label class="field"><span>Mã nhân viên *</span><input name="ma" maxlength="20" required></label>
+        <label class="field"><span>Họ tên *</span><input name="hoTen" maxlength="100" required></label>
+        <label class="field"><span>Ngày sinh</span><input type="date" name="ngaySinh"></label>
+        <label class="field"><span>Giới tính *</span>
+          <select name="gioiTinh"><option>Nam</option><option>Nữ</option><option>Khác</option></select></label>
+        <label class="field"><span>Email *</span><input type="email" name="email" maxlength="100" required></label>
+        <label class="field"><span>Số điện thoại</span><input type="tel" name="sdt" maxlength="15" placeholder="0901234567"></label>
+        <label class="field wide"><span>Địa chỉ</span><input name="diaChi" maxlength="255"></label>
+        <label class="field"><span>Phòng ban *</span><select name="phongBan"></select></label>
+        <label class="field"><span>Chức vụ *</span><input name="chucVu" maxlength="100" required></label>
+        <label class="field"><span>Lương cơ bản (₫) *</span><input type="number" name="luong" min="1" step="1000" inputmode="numeric" required></label>
+        <label class="field"><span>Ngày vào làm *</span><input type="date" name="ngayVaoLam" required></label>
+        <label class="field"><span>Trạng thái *</span>
+          <select name="trangThai"><option>Đang làm</option><option>Đã nghỉ</option></select></label>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn" id="btnCancel">Hủy</button>
+        <button type="submit" class="btn primary" id="btnSave">Lưu nhân viên</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle">
+    <form method="dialog" class="confirm">
+      <h2 id="confirmTitle">Xác nhận</h2>
+      <p id="confirmText"></p>
+      <div class="actions">
+        <button class="btn" value="cancel">Giữ lại</button>
+        <button class="btn danger" value="ok" id="confirmOk">Xóa</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/storage.js"></script>
+  <script src="js/employee-service.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
