@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 
 import {
@@ -14,45 +15,66 @@ function App() {
     const [employees, setEmployees] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+
     const [showForm, setShowForm] = useState(false);
     const [editingEmployee, setEditingEmployee] = useState(null);
+
     const [message, setMessage] = useState("");
     const [keyword, setKeyword] = useState("");
+
     const [activeMenu, setActiveMenu] = useState("overview");
 
-    // Lấy danh sách nhân viên từ Backend
-    async function loadEmployees() {
-        try {
-            setError("");
-            const data = await getEmployees();
-            setEmployees(data);
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    }
+    // Phân trang
+    const [currentPage, setCurrentPage] = useState(0);
+    const [pageSize] = useState(10);
+    const [totalPages, setTotalPages] = useState(0);
+    const [totalElements, setTotalElements] = useState(0);
 
-    // Tự động tải dữ liệu khi mở ứng dụng
+    // Làm mới dữ liệu sau khi thêm, sửa, xóa
+    const [reloadKey, setReloadKey] = useState(0);
+
+    // Tải dữ liệu từ Backend theo từng trang
     useEffect(() => {
-        loadEmployees();
-    }, []);
+        let isActive = true;
 
-    // Thêm hoặc cập nhật nhân viên
-    async function handleSave(employee) {
-        if (editingEmployee) {
-            await updateEmployee(editingEmployee.id, employee);
-            showNotification("Cập nhật nhân viên thành công!");
-        } else {
-            await createEmployee(employee);
-            showNotification("Thêm nhân viên thành công!");
+        async function loadEmployees() {
+            try {
+                setLoading(true);
+                setError("");
+
+                const data = await getEmployees(
+                    currentPage,
+                    pageSize,
+                    keyword
+                );
+
+                if (!isActive) return;
+
+                setEmployees(data.content);
+                setTotalPages(data.totalPages);
+                setTotalElements(data.totalElements);
+                setCurrentPage(data.number);
+            } catch (err) {
+                if (isActive) {
+                    setError(err.message);
+                }
+            } finally {
+                if (isActive) {
+                    setLoading(false);
+                }
+            }
         }
 
-        await loadEmployees();
+        // Tránh gọi API liên tục khi người dùng đang nhập tìm kiếm
+        const timer = setTimeout(() => {
+            loadEmployees();
+        }, 300);
 
-        setShowForm(false);
-        setEditingEmployee(null);
-    }
+        return () => {
+            isActive = false;
+            clearTimeout(timer);
+        };
+    }, [currentPage, pageSize, keyword, reloadKey]);
 
     // Hiển thị thông báo
     function showNotification(text) {
@@ -61,6 +83,28 @@ function App() {
         setTimeout(() => {
             setMessage("");
         }, 3000);
+    }
+
+    // Thêm hoặc cập nhật nhân viên
+    async function handleSave(employee) {
+        try {
+            if (editingEmployee) {
+                await updateEmployee(editingEmployee.id, employee);
+                showNotification("Cập nhật nhân viên thành công!");
+            } else {
+                await createEmployee(employee);
+                showNotification("Thêm nhân viên thành công!");
+            }
+
+            setShowForm(false);
+            setEditingEmployee(null);
+
+            // Sau khi thêm mới, quay về trang đầu
+            setCurrentPage(0);
+            setReloadKey(prev => prev + 1);
+        } catch (err) {
+            setError(err.message);
+        }
     }
 
     // Xóa nhân viên
@@ -73,8 +117,16 @@ function App() {
 
         try {
             await deleteEmployee(id);
-            await loadEmployees();
+
             showNotification("Xóa nhân viên thành công!");
+
+            // Nếu xóa bản ghi cuối cùng của trang,
+            // chuyển về trang trước nếu cần
+            if (employees.length === 1 && currentPage > 0) {
+                setCurrentPage(prev => prev - 1);
+            }
+
+            setReloadKey(prev => prev + 1);
         } catch (err) {
             setError(err.message);
         }
@@ -98,19 +150,21 @@ function App() {
         setEditingEmployee(null);
     }
 
-    // Tìm kiếm nhân viên trên Frontend
-    const filteredEmployees = employees.filter(employee =>
-        [
-            employee.fullName,
-            employee.email,
-            employee.position
-        ].some(value =>
-            value?.toLowerCase().includes(keyword.toLowerCase())
-        )
-    );
+    // Chuyển trang
+    function handlePageChange(page) {
+        if (page < 0 || page >= totalPages) return;
+
+        setCurrentPage(page);
+    }
+
+    // Tìm kiếm
+    function handleSearch(e) {
+        setKeyword(e.target.value);
+        setCurrentPage(0);
+    }
 
     // Thống kê
-    const totalEmployees = employees.length;
+    const totalEmployees = totalElements;
 
     const totalPositions = new Set(
         employees.map(employee => employee.position)
@@ -216,14 +270,14 @@ function App() {
 
                     <div className="stat-card">
                         <span>Đang hiển thị</span>
-                        <h2>{filteredEmployees.length}</h2>
-                        <small>Kết quả tìm kiếm</small>
+                        <h2>{employees.length}</h2>
+                        <small>Nhân viên trên trang hiện tại</small>
                     </div>
 
                     <div className="stat-card">
                         <span>Chức vụ</span>
                         <h2>{totalPositions}</h2>
-                        <small>Số loại chức vụ</small>
+                        <small>Số loại chức vụ trên trang hiện tại</small>
                     </div>
 
                 </section>
@@ -266,7 +320,7 @@ function App() {
                             type="text"
                             placeholder="Tìm theo tên, email, chức vụ..."
                             value={keyword}
-                            onChange={e => setKeyword(e.target.value)}
+                            onChange={handleSearch}
                         />
 
                     </div>
@@ -278,100 +332,141 @@ function App() {
                             {error}
                         </p>
                     ) : (
-                        <div className="table-wrapper">
+                        <>
+                            <div className="table-wrapper">
 
-                            <table className="employee-table">
+                                <table className="employee-table">
 
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Họ và tên</th>
-                                        <th>Email</th>
-                                        <th>Điện thoại</th>
-                                        <th>Chức vụ</th>
-                                        <th>Lương</th>
-                                        <th>Thao tác</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody>
-
-                                    {filteredEmployees.map(employee => (
-
-                                        <tr key={employee.id}>
-
-                                            <td>
-                                                <span className="id-badge">
-                                                    #{employee.id}
-                                                </span>
-                                            </td>
-
-                                            <td>
-                                                <strong>
-                                                    {employee.fullName}
-                                                </strong>
-                                            </td>
-
-                                            <td>
-                                                {employee.email}
-                                            </td>
-
-                                            <td>
-                                                {employee.phone || "-"}
-                                            </td>
-
-                                            <td>
-                                                <span className="position-badge">
-                                                    {employee.position}
-                                                </span>
-                                            </td>
-
-                                            <td className="salary-cell">
-                                                {Number(employee.salary)
-                                                    .toLocaleString("vi-VN")} đ
-                                            </td>
-
-                                            <td>
-                                                <div className="action-buttons">
-
-                                                    <button
-                                                        className="edit-btn"
-                                                        onClick={() =>
-                                                            handleEdit(employee)
-                                                        }
-                                                    >
-                                                        Sửa
-                                                    </button>
-
-                                                    <button
-                                                        className="delete-btn"
-                                                        onClick={() =>
-                                                            handleDelete(employee.id)
-                                                        }
-                                                    >
-                                                        Xóa
-                                                    </button>
-
-                                                </div>
-                                            </td>
-
-                                        </tr>
-
-                                    ))}
-
-                                    {filteredEmployees.length === 0 && (
+                                    <thead>
                                         <tr>
-                                            <td colSpan="7" className="empty-state">
-                                                Không tìm thấy nhân viên phù hợp.
-                                            </td>
+                                            <th>ID</th>
+                                            <th>Họ và tên</th>
+                                            <th>Email</th>
+                                            <th>Điện thoại</th>
+                                            <th>Chức vụ</th>
+                                            <th>Lương</th>
+                                            <th>Thao tác</th>
                                         </tr>
-                                    )}
+                                    </thead>
 
-                                </tbody>
+                                    <tbody>
 
-                            </table>
+                                        {employees.map(employee => (
 
-                        </div>
+                                            <tr key={employee.id}>
+
+                                                <td>
+                                                    <span className="id-badge">
+                                                        #{employee.id}
+                                                    </span>
+                                                </td>
+
+                                                <td>
+                                                    <strong>
+                                                        {employee.fullName}
+                                                    </strong>
+                                                </td>
+
+                                                <td>
+                                                    {employee.email}
+                                                </td>
+
+                                                <td>
+                                                    {employee.phone || "-"}
+                                                </td>
+
+                                                <td>
+                                                    <span className="position-badge">
+                                                        {employee.position}
+                                                    </span>
+                                                </td>
+
+                                                <td className="salary-cell">
+                                                    {Number(employee.salary)
+                                                        .toLocaleString("vi-VN")} đ
+                                                </td>
+
+                                                <td>
+                                                    <div className="action-buttons">
+
+                                                        <button
+                                                            className="edit-btn"
+                                                            onClick={() =>
+                                                                handleEdit(employee)
+                                                            }
+                                                        >
+                                                            Sửa
+                                                        </button>
+
+                                                        <button
+                                                            className="delete-btn"
+                                                            onClick={() =>
+                                                                handleDelete(employee.id)
+                                                            }
+                                                        >
+                                                            Xóa
+                                                        </button>
+
+                                                    </div>
+                                                </td>
+
+                                            </tr>
+
+                                        ))}
+
+                                        {employees.length === 0 && (
+                                            <tr>
+                                                <td colSpan="7" className="empty-state">
+                                                    Không tìm thấy nhân viên phù hợp.
+                                                </td>
+                                            </tr>
+                                        )}
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                            {/* PAGINATION */}
+                            <div className="pagination">
+
+                                <button
+                                    disabled={currentPage === 0 || loading}
+                                    onClick={() =>
+                                        handlePageChange(currentPage - 1)
+                                    }
+                                >
+                                    Trước
+                                </button>
+
+                                <span>
+                                    Trang {totalPages === 0 ? 0 : currentPage + 1}
+                                    {" / "}
+                                    {totalPages}
+                                </span>
+
+                                <button
+                                    disabled={
+                                        currentPage >= totalPages - 1 ||
+                                        totalPages === 0 ||
+                                        loading
+                                    }
+                                    onClick={() =>
+                                        handlePageChange(currentPage + 1)
+                                    }
+                                >
+                                    Sau
+                                </button>
+
+                            </div>
+
+                            <p className="pagination-info">
+                                Tổng cộng {totalElements} nhân viên
+                                {" · "}
+                                Hiển thị {employees.length} nhân viên mỗi trang
+                            </p>
+                        </>
                     )}
 
                 </section>

@@ -1,9 +1,20 @@
 
 const API_URL = "http://localhost:8080/api/employees";
 
-// GET: Lấy danh sách nhân viên
-export async function getEmployees() {
-    const response = await fetch(API_URL);
+// GET: Lấy danh sách nhân viên theo phân trang
+export async function getEmployees(page = 0, size = 10, keyword = "") {
+    const params = new URLSearchParams({
+        page: page.toString(),
+        size: size.toString(),
+        keyword: keyword,
+        position: "",
+        sortBy: "id",
+        direction: "asc"
+    });
+
+    const response = await fetch(
+        `${API_URL}/search?${params.toString()}`
+    );
 
     if (!response.ok) {
         throw new Error("Không thể tải danh sách nhân viên");
